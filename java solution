@@ -1,0 +1,102 @@
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonElement;
+
+import java.io.FileReader;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+
+class Point {
+    int x;
+    int y;
+
+    Point(int x, int y) {
+        this.x = x;
+        this.y = y;
+    }
+}
+
+public class SecretSharingSolver {
+    static class InputData {
+        JsonObject keys;
+    }
+
+    private static List<Point> parseInput(String jsonInput) {
+        Gson gson = new Gson();
+        JsonObject data = gson.fromJson(jsonInput, JsonObject.class);
+        JsonObject keys = data.getAsJsonObject("keys");
+        int n = keys.get("n").getAsInt();
+
+        List<Point> points = new ArrayList<>();
+        for (int i = 1; i <= n; i++) {
+            JsonElement element = data.get(String.valueOf(i));
+            if (element != null && element.isJsonObject()) {
+                JsonObject pointData = element.getAsJsonObject();
+                int x = i;
+                int y = Integer.parseInt(pointData.get("value").getAsString(), Integer.parseInt(pointData.get("base").getAsString()));
+                points.add(new Point(x, y));
+            }
+        }
+        return points;
+    }
+
+    private static int lagrangeInterpolation(List<Point> points, int k) {
+        int secret = 0;
+        for (int i = 0; i < k; i++) {
+            int term = points.get(i).y;
+            for (int j = 0; j < k; j++) {
+                if (i != j) {
+                    term = term * (0 - points.get(j).x) / (points.get(i).x - points.get(j).x);
+                }
+            }
+            secret += term;
+        }
+        return Math.round(secret);
+    }
+
+    public static int solveSecretSharing(String jsonInput) throws Exception {
+        Gson gson = new Gson();
+        InputData inputData = gson.fromJson(jsonInput, InputData.class);
+        int k = inputData.keys.get("k").getAsInt();
+
+        List<Point> points = parseInput(jsonInput);
+        if (points.size() < k) {
+            throw new Exception("Not enough points provided. Need at least " + k + " points.");
+        }
+
+        return lagrangeInterpolation(points, k);
+    }
+
+    public static void main(String[] args) {
+        String[] testCases = {
+            "{\"keys\": {\"n\": 4, \"k\": 3}, \"1\": {\"base\": \"10\", \"value\": \"4\"}, \"2\": {\"base\": \"2\", \"value\": \"111\"}, \"3\": {\"base\": \"10\", \"value\": \"12\"}, \"6\": {\"base\": \"4\", \"value\": \"213\"}}",
+            "{\"keys\": {\"n\": 5, \"k\": 4}, \"1\": {\"base\": \"16\", \"value\": \"A\"}, \"2\": {\"base\": \"2\", \"value\": \"1010\"}, \"3\": {\"base\": \"8\", \"value\": \"15\"}, \"4\": {\"base\": \"10\", \"value\": \"20\"}, \"5\": {\"base\": \"3\", \"value\": \"202\"}}"
+        };
+
+        for (int i = 0; i < testCases.length; i++) {
+            System.out.println("Running Test Case " + (i + 1) + ":");
+            try {
+                int secret = solveSecretSharing(testCases[i]);
+                System.out.println("The secret (constant term) is: " + secret);
+            } catch (Exception e) {
+                System.out.println("Error in Test Case " + (i + 1) + ": " + e.getMessage());
+            }
+            System.out.println("---");
+        }
+    }
+
+    // Uncomment and modify this method to run a custom test case from a file
+    /*
+    private static void runCustomTestCase(String filePath) {
+        try {
+            String jsonInput = new String(Files.readAllBytes(Paths.get(filePath)));
+            int secret = solveSecretSharing(jsonInput);
+            System.out.println("Custom Test Case (" + filePath + "):");
+            System.out.println("The secret (constant term) is: " + secret);
+        } catch (Exception e) {
+            System.out.println("Error in Custom Test Case (" + filePath + "): " + e.getMessage());
+        }
+    }
+    */
+}
