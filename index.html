@@ -27,6 +27,9 @@
         .output {
             margin-top: 20px;
         }
+        .error {
+            color: red;
+        }
     </style>
 </head>
 <body>
@@ -38,7 +41,12 @@
     </div>
 
     <script>
-        // Function to parse the JSON and extract points
+        // Function to convert a number from a given base to decimal
+        function convertToDecimal(value, base) {
+            return parseInt(value, base);
+        }
+
+        // Parse input JSON and extract points
         function parseInput(data) {
             const { n, k } = data.keys;
             const points = [];
@@ -46,26 +54,92 @@
             for (let i = 1; i <= n; i++) {
                 if (data[i]) {
                     const x = parseInt(i);
-                    const y = parseInt(data[i].value, parseInt(data[i].base));
+                    const y = convertToDecimal(data[i].value, parseInt(data[i].base));
                     points.push({ x, y });
                 }
             }
             return { n, k, points };
         }
 
-        // Function to perform Lagrange interpolation and find the constant term 'c'
-        function lagrangeInterpolation(points, k) {
-            let secret = 0;
-            for (let i = 0; i < k; i++) {
-                let li = 1;
-                for (let j = 0; j < k; j++) {
-                    if (i !== j) {
-                        li *= -points[j].x / (points[i].x - points[j].x);
+        // Helper function to generate combinations
+        function generateCombinations(arr, k) {
+            const results = [];
+            function generateComb(start, combo) {
+                if (combo.length === k) {
+                    results.push(combo.slice());
+                    return;
+                }
+                for (let i = start; i < arr.length; i++) {
+                    combo.push(arr[i]);
+                    generateComb(i + 1, combo);
+                    combo.pop();
+                }
+            }
+            generateComb(0, []);
+            return results;
+        }
+
+        // Lagrange Interpolation Method to find polynomial value
+        function lagrangeInterpolation(x, y) {
+            return function (x0) {
+                let total = 0;
+                for (let i = 0; i < x.length; i++) {
+                    let xi = x[i];
+                    let yi = y[i];
+                    let li = 1;
+                    for (let j = 0; j < x.length; j++) {
+                        if (i !== j) {
+                            li *= (x0 - x[j]) / (xi - x[j]);
+                        }
+                    }
+                    total += li * yi;
+                }
+                return total;
+            };
+        }
+
+        // Function to identify incorrect points
+        function identifyIncorrectPoints(k, points) {
+            const keys = points.map(point => point.x);
+            const values = points.map(point => point.y);
+
+            let incorrectPoints = [];
+            let minError = Infinity;
+
+            const combinations = generateCombinations(keys, k);
+
+            // Precompute y values for all x
+            const yValuesByKey = Object.fromEntries(keys.map((key, idx) => [key, values[idx]]));
+
+            for (const combo of combinations) {
+                const xCombo = combo;
+                const yCombo = combo.map(key => yValuesByKey[key]);
+
+                const interpolate = lagrangeInterpolation(xCombo, yCombo);
+
+                let totalError = 0;
+                let currentIncorrectPoints = [];
+
+                for (let i = 0; i < keys.length; i++) {
+                    if (!combo.includes(keys[i])) {
+                        const xTest = keys[i];
+                        const yTest = yValuesByKey[xTest];
+                        const yPred = interpolate(xTest);
+                        const error = Math.abs(yTest - yPred);
+                        totalError += error;
+                        if (error > 1e-6) { // Threshold for considering a point incorrect
+                            currentIncorrectPoints.push(xTest);
+                        }
                     }
                 }
-                secret += li * points[i].y;
+
+                if (totalError < minError) {
+                    minError = totalError;
+                    incorrectPoints = currentIncorrectPoints;
+                }
             }
-            return Math.round(secret);
+
+            return incorrectPoints;
         }
 
         // Function to process the uploaded file and compute the result
@@ -80,21 +154,28 @@
                     try {
                         const data = JSON.parse(jsonInput);
                         const { n, k, points } = parseInput(data);
+
                         if (points.length < k) {
-                            outputDiv.innerHTML = '<strong>Error:</strong> Not enough points provided.';
+                            outputDiv.innerHTML = '<div class="error"><strong>Error:</strong> Not enough points provided.</div>';
                             return;
                         }
-                        const result = lagrangeInterpolation(points, k);
+
+                        const incorrectPoints = identifyIncorrectPoints(k, points);
 
                         // Display the result
-                        outputDiv.innerHTML = `<strong>Constant term (Secret):</strong> ${result}`;
+                        if (incorrectPoints.length > 0) {
+                            outputDiv.innerHTML = `<strong>Incorrect Points:</strong> ${JSON.stringify(incorrectPoints)}`;
+                        } else {
+                            outputDiv.innerHTML = '<strong>All points are correct.</strong>';
+                        }
+
                     } catch (error) {
-                        outputDiv.innerHTML = '<strong>Error:</strong> Invalid JSON or processing error.';
+                        outputDiv.innerHTML = `<div class="error"><strong>Error:</strong> Invalid JSON or processing error: ${error.message}</div>`;
                     }
                 };
                 reader.readAsText(fileInput);
             } else {
-                outputDiv.innerHTML = '<strong>Error:</strong> No file selected.';
+                outputDiv.innerHTML = '<div class="error"><strong>Error:</strong> No file selected.</div>';
             }
         }
     </script>
